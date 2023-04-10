@@ -1,0 +1,430 @@
+---
+title: "Braintree Public Schools"
+author: "Theresa Szczepanski"
+desription: "Overview of BPS Population and Enrollment"
+date: "12/05/2022"
+format:
+  html:
+    df-print: paged
+    toc: true
+    code-fold: true
+    code-copy: true
+    code-tools: true
+categories:
+  - Theresa_Szczepanski
+  - Brantiree_Public_Schools
+
+---
+
+```{r}
+#| label: setup
+#| warning: false
+#| message: false
+
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(hrbrthemes)
+library(viridis)
+library(ggpubr)
+library(purrr)
+library(plotly)
+
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+## Challenge Overview
+
+
+
+
+
+### Read in data
+
+Read in Enrollment by Selected Populations
+
+```{r}
+BPS_Selected_Pops_2017 <- read_excel("_data/Braintree Public Schools/Selected Populations Reports (School).xlsx", sheet = "2017-2018",
+             skip = 2, col_names= c("School Name", "School Code", "First Language Not English", "% First Language Not English","English Language Learners", "% English Language Learners","Students with Disabilities", "% Students with Disabilities", "delete", "delete", "delete", "delete", "delete","delete", "High Needs", "% High Needs", "Economically Disadvantaged", "% Economically Disadvantaged")) %>%
+                  select(!contains("delete"))
+
+
+BPS_Selected_Pops_Current <- read_excel("_data/Braintree Public Schools/Selected Populations Reports (School).xlsx",sheet = "2022-2023", skip = 1)%>%
+  select(`School Name`, `First Language Not English #`, `First Language Not English %`, `English Language Learner #`,`English Language Learner %`, `Students With Disabilities #`, `Students With Disabilities %`, contains("#...16"), contains("Low"))%>%
+  filter(str_detect(`School Name`,"Braintree"))%>%
+  filter(!str_detect(`School Name`, "Braintree High"))%>%
+  filter(!str_detect(`School Name`, "Middle"))%>%
+  filter(!str_detect(`School Name`, "Quab"))%>%
+  filter(!str_detect(`School Name`, "Monat"))%>%
+  mutate(`High Needs %` = `High Needs #...16`)
+  
+
+BPS_Selected_Pops_Current
+
+```
+
+Read in Enrollment by Grade
+
+```{r}
+BPS_Enrollment_by_Grade_Current <- read_excel("_data/Braintree Public Schools/Enrollment by Grade (School).xlsx",sheet = "2022-2023", skip = 1)%>%
+  select(`School Name`, `1.0`,`2.0`, `3.0`, `4.0`)%>%
+  filter(str_detect(`School Name`,"Braintree"))%>%
+  filter(!str_detect(`School Name`, "Braintree High"))%>%
+  pivot_longer(c(2:5), names_to ="Grade Level", values_to = "Enrollment Grade Level")
+
+
+#view(BPS_Enrollment_by_Grade_Current)
+
+BPS_Elementary_Enrollment_by_Grade_Current<-BPS_Enrollment_by_Grade_Current%>%
+  filter(!str_detect(`School Name`, "Middle"))%>%
+  filter(!str_detect(`School Name`, "Quab"))%>%
+  filter(!str_detect(`School Name`, "Monat"))%>%
+  mutate(`Current MS` = case_when(
+    !str_detect(`School Name`, "Liberty|Highlands") ~ "East",
+     str_detect(`School Name`, "Liberty|Highlands") ~ "South"))%>%
+  mutate(`Proposed MS` = case_when(
+    !str_detect(`School Name`, "Liberty|Highlands|Flaherty") ~ "East",
+     str_detect(`School Name`, "Liberty|Highlands|Flaherty") ~ "South"))%>%
+  mutate(`Proposed MS2` = case_when(
+    !str_detect(`School Name`, "Liberty|Highlands|Morrison") ~ "East",
+     str_detect(`School Name`, "Liberty|Highlands|Morrison") ~ "South"))
+
+view(BPS_Elementary_Enrollment_by_Grade_Current)
+
+
+```
+
+Proposed 2026 Enrollment for Middle Schools
+```{r}
+BPS_2026_Elementary_Feeding<-BPS_Elementary_Enrollment_by_Grade_Current%>%
+  group_by(`Current MS`, `School Name`,`Proposed MS`, `Proposed MS2`)%>%
+  filter(str_detect(`Grade Level`, "1|2|3|4"))%>%
+  summarize(Sending_Pop_2026 = sum(`Enrollment Grade Level`, na.rm=TRUE))
+ 
+  
+  MS_Current_2026_Projected_Enrollment<-BPS_2026_Elementary_Feeding%>%
+  group_by(`Current MS`)%>%
+  summarize(MS_Current_2026_Enrollment = sum(`Sending_Pop_2026`, na.rm=TRUE))
+  
+BPS_2026_Proposed_Elementary_Feeding<-BPS_Elementary_Enrollment_by_Grade_Current%>%
+  group_by(`Proposed MS`, `School Name`)%>%
+  filter(str_detect(`Grade Level`, "1|2|3|4"))%>%
+  summarize(Sending_Pop_2026 = sum(`Enrollment Grade Level`, na.rm=TRUE))
+  
+MS_Proposed_2026_Projected_Enrollment<-BPS_2026_Proposed_Elementary_Feeding%>%
+   group_by(`Proposed MS`)%>%
+   summarize(MS_Proposed_2026_Enrollment = sum(`Sending_Pop_2026`, na.rm=TRUE))
+
+BPS_2026_Proposed2_Elementary_Feeding<-BPS_Elementary_Enrollment_by_Grade_Current%>%
+  group_by(`Proposed MS2`, `School Name`)%>%
+  filter(str_detect(`Grade Level`, "1|2|3|4"))%>%
+  summarize(Sending_Pop_2026 = sum(`Enrollment Grade Level`, na.rm=TRUE))
+
+MS_Proposed2_2026_Projected_Enrollment<-BPS_2026_Proposed2_Elementary_Feeding%>%
+   group_by(`Proposed MS2`)%>%
+   summarize(MS2_Proposed_2026_Enrollment = sum(`Sending_Pop_2026`, na.rm=TRUE))
+  
+ BPS_2026_Elementary_Feeding
+MS_2026_Projected_Enrollment
+MS_Proposed_2026_Projected_Enrollment
+MS_Proposed2_2026_Projected_Enrollment
+
+MS_Proposed_2026_Projected_Enrollment<-left_join(MS_Proposed_2026_Projected_Enrollment, BPS_2026_Elementary_Feeding, "Proposed MS")
+MS_Proposed_2026_Projected_Enrollment<-MS_Proposed_2026_Projected_Enrollment%>%
+  mutate(`%MS_Proposed_2026_Enrollment` = round(Sending_Pop_2026/MS_Proposed_2026_Enrollment,2))
+MS_Proposed_2026_Projected_Enrollment<-MS_Proposed_2026_Projected_Enrollment%>%
+  left_join(MS_2026_Projected_Enrollment, "Current MS")
+MS_Proposed_2026_Projected_Enrollment<-MS_Proposed_2026_Projected_Enrollment%>%
+  mutate(`%MS_Current_2026_Enrollment` = round(Sending_Pop_2026/MS_2026_Enrollment,2))
+
+view(MS_Proposed_2026_Project_Enrollment)
+
+
+MS_Proposed2_2026_Projected_Enrollment<-left_join(MS_Proposed2_2026_Projected_Enrollment, BPS_2026_Elementary_Feeding, "Proposed MS2")
+MS_Proposed2_2026_Projected_Enrollment<-MS_Proposed2_2026_Projected_Enrollment%>%
+  mutate(`%MS_Proposed2_2026_Enrollment` = round(Sending_Pop_2026/MS2_Proposed_2026_Enrollment,2))
+MS_Proposed2_2026_Projected_Enrollment<-MS_Proposed2_2026_Projected_Enrollment%>%
+  left_join(MS_2026_Projected_Enrollment, "Current MS")
+# MS_Proposed_2026_Projected_Enrollment<-MS_Proposed2_2026_Projected_Enrollment%>%
+#    mutate(`%MS_Current_2026_Enrollment` = round(Sending_Pop_2026/MS_2026_Enrollment,2))
+
+MS_Proposed2_2026_Projected_Enrollment
+MS_Proposed_2026_Projected_Enrollment
+
+MS_Enrollment_Options<-MS_Proposed2_2026_Projected_Enrollment%>%
+  select(`School Name`, `MS2_Proposed_2026_Enrollment`, `%MS_Proposed2_2026_Enrollment`)%>%
+  left_join(MS_Proposed_2026_Projected_Enrollment, "School Name")
+
+MS_Enrollment_Options
+MS_Enrollment_Options<-MS_Enrollment_Options%>%
+  select(`School Name`, `Sending_Pop_2026`, `Current MS`, `MS_2026_Enrollment`, `%MS_Current_2026_Enrollment`,
+         `Proposed MS`, `MS_Proposed_2026_Enrollment`, `%MS_Proposed_2026_Enrollment`,`Proposed MS2`, `MS2_Proposed_2026_Enrollment`, `%MS_Proposed2_2026_Enrollment` )
+
+MS_Enrollment_Options
+```
+Read in/Tidy Enrollment by Race/Gender 
+
+```{r}
+BPS_Elementary_Enrollment_by_Race <- read_excel("_data/Braintree Public Schools/Enrollment by Race_Gender Report.xlsx",sheet = "2022-2023", skip = 1)%>%
+  select(`School Name`, `African American`, `Asian`, `Hispanic`,`White`, `Native American`, `Native Hawaiian, Pacific Islander`, `Multi-Race, Non-Hispanic`)%>%
+  filter(str_detect(`School Name`,"Braintree"))%>%
+  filter(!str_detect(`School Name`, "Braintree Highschool"))%>%
+  filter(!str_detect(`School Name`, "Middle"))%>%
+  filter(!str_detect(`School Name`, "Quab"))%>%
+  filter(!str_detect(`School Name`, "Monat"))%>%
+  filter(!str_detect(`School Name`, "Braintree High"))%>%
+  
+  mutate(`Current MS` = case_when(
+    !str_detect(`School Name`, "Liberty|Highlands") ~ "East",
+     str_detect(`School Name`, "Liberty|Highlands") ~ "South"))%>%
+   mutate(`Proposed MS` = case_when(
+    !str_detect(`School Name`, "Liberty|Highlands|Flaherty") ~ "East",
+     str_detect(`School Name`, "Liberty|Highlands|Flaherty") ~ "South"))%>%
+ pivot_longer(c(2:8), names_to ="Race", values_to = "% Race Sending")%>%
+  mutate(`% Race Sending`= `% Race Sending`/100)
+  
+ Proposed_East_2026_Enrollment<-BPS_Elementary_Enrollment_by_Race%>%
+   group_by(`Proposed MS`)%>%
+   summarise()
+
+
+
+(BPS_Elementary_Enrollment_by_Race)
+
+
+```
+Join Total Proposed Enrollment with Race Data
+```{r}
+Enrollment_Total_Race_Test<-BPS_Elementary_Enrollment_by_Race%>%
+  select(!contains("MS"))%>%
+           left_join(MS_Proposed_2026_Projected_Enrollment, "School Name")%>%
+            mutate(`%Race_Current_MS` = round(`%MS_Current_2026_Enrollment`*`% Race Sending`,2))%>%
+            mutate(`%Race_Proposed_MS` = round(`%MS_Proposed_2026_Enrollment`*`% Race Sending`,2))
+
+ 
+
+Enrollment_Total_Race_Test
+
+```
+Selected Populations Tidy
+
+```{r}
+BPS_Selected_Pops_Current
+BPS_Selected_Pops_Current<-BPS_Selected_Pops_Current%>%
+  select("School Name", contains("%"))%>%
+  pivot_longer(c(2:6), names_to = "Select Population", values_to = "% Select Sending School")
+
+BPS_Selected_Pops_Current<-BPS_Selected_Pops_Current%>%
+  mutate(`% Select Sending School` = `% Select Sending School`/100)
+
+BPS_Selected_Pops_Current<-BPS_Selected_Pops_Current%>%
+  left_join(MS_Enrollment_Options, "School Name")%>%
+    mutate(`%Select_Current_MS` = round(`%MS_Current_2026_Enrollment`*`% Select Sending School`,2))%>%
+   mutate(`%Select_Proposed_MS` = round(`%MS_Proposed_2026_Enrollment`*`% Select Sending School`,2))%>%
+  mutate(`%Select_Proposed_MS2` = round(`%MS_Proposed2_2026_Enrollment`*`% Select Sending School`,2))
+ 
+
+BPS_Selected_Pops_Current
+
+
+
+```
+
+2026 Projected Demographics using 2022 numbers
+
+```{r}
+# BPS_2026_Proposed_Demo<-BPS_Selected_Pops_Current%>%
+#   left_join(Enrollment_Total_Race_Test, "School Name")%>%
+#   mutate(`%Race_Current_MS` = round(`%MS_Current_2026_Enrollment`*`% Race Sending`,2))%>%
+#   mutate(`%Select_Current_MS` = round(`%MS_Current_2026_Enrollment`*`% Select Sending School`,2))%>%
+#   mutate(`%Race_Proposed_MS` = round(`%MS_Proposed_2026_Enrollment`*`% Race Sending`,2))%>%
+#   mutate(`%Select_Proposed_MS` = round(`%MS_Proposed_2026_Enrollment`*`% Select Sending School`,2))
+# 
+# 
+# BPS_2026_Proposed_Demo
+
+```
+
+```{r}
+BPS_Selected_Pops_Current
+BPS_Selected_Pops_Current%>%
+  group_by(`Proposed MS2`, `Select Population`)%>%
+  summarise(`%Select_Proposed_MS2` = sum(`%Select_Proposed_MS2`, na.rm=TRUE))%>%
+  ggplot(aes(fill=`Proposed MS2`, y=`%Select_Proposed_MS2`, x=`Select Population`)) + geom_bar(position="dodge", stat="identity")+
+  labs(subtitle ="Morrison to South" ,
+       y = "Percentage of School",
+       x= "Selected Population",
+       title = "Projected %Select Populations 2026 Proposed Feeding Pattern 2",
+      caption = "Using 2022-2023 Selected Population Numbers")+
+       theme(axis.text.x=element_text(angle=60,hjust=1))+
+   geom_text(aes(label = `%Select_Proposed_MS2`), vjust = 1.5, colour = "white", position = position_dodge(.9))
+
+```
+
+```{r}
+BPS_Selected_Pops_Current
+BPS_Selected_Pops_Current%>%
+  group_by(`Proposed MS`, `Select Population`)%>%
+  summarise(`%Select_Proposed_MS` = sum(`%Select_Proposed_MS`, na.rm=TRUE))%>%
+  ggplot(aes(fill=`Proposed MS`, y=`%Select_Proposed_MS`, x=`Select Population`)) + geom_bar(position="dodge", stat="identity")+
+  labs(subtitle ="Flaherty to South" ,
+       y = "Percentage of School",
+       x= "Selected Population",
+       title = "Projected %Select Populations 2026 Proposed Feeding Pattern",
+      caption = "Using 2022-2023 Selected Population Numbers")+
+       theme(axis.text.x=element_text(angle=60,hjust=1))+
+   geom_text(aes(label = `%Select_Proposed_MS`), vjust = 1.5, colour = "white", position = position_dodge(.9))
+
+```
+
+```{r}
+BPS_Selected_Pops_Current
+BPS_Selected_Pops_Current%>%
+  group_by(`Current MS`, `Select Population`)%>%
+  summarise(`%Select_Current_MS` = sum(`%Select_Current_MS`, na.rm=TRUE))%>%
+  ggplot(aes(fill=`Current MS`, y=`%Select_Current_MS`, x=`Select Population`)) + geom_bar(position="dodge", stat="identity")+
+  labs(subtitle ="No shift to feeding patterns" ,
+       y = "Percentage of School",
+       x= "Selected Population",
+       title = "Projected %Select Populations 2026 Current Feeding Pattern",
+      caption = "Using 2022-2023 Selected Population Numbers")+
+       theme(axis.text.x=element_text(angle=60,hjust=1))+
+   geom_text(aes(label = `%Select_Current_MS`), vjust = 1.5, colour = "white", position = position_dodge(.9))
+
+```
+Academic Performance
+
+```{r}
+BPS_MCAS_Current <- read_excel("_data/Braintree Public Schools/MCAS_Performance_2022.xlsx")
+#view(BPS_MCAS_Current)
+BPS_MCAS_Current<-BPS_MCAS_Current%>%
+  mutate(`Current MS %Math` = round(`%MS_Current_2026_Enrollment`*`Math%Meet or Exceed`,2))%>%
+ mutate(`Current MS %ELA` = round(`%MS_Current_2026_Enrollment`*`ELA%Meet or Exceed`,2))%>%
+  mutate(`Proposed MS %Math` = round(`%MS_Proposed_2026_Enrollment`*`Math%Meet or Exceed`,2))%>%
+ mutate(`Proposed MS %ELA` = round(`%MS_Proposed_2026_Enrollment`*`ELA%Meet or Exceed`,2))%>%
+  mutate(`Proposed MS2 %Math` = round(`%MS2_Proposed_2026_Enrollment`*`Math%Meet or Exceed`,2))%>%
+ mutate(`Proposed MS2 %ELA` = round(`%MS2_Proposed_2026_Enrollment`*`ELA%Meet or Exceed`,2))
+
+
+BPS_MCAS_Current
+
+
+
+```
+
+```{r}
+Current_MS_MCAS<-BPS_MCAS_Current%>%
+  group_by(`Current MS`)%>%
+  summarise(`Math% Meet or Exceed` = sum(`Current MS %Math`),
+                    `ELA% Meet or Exceed` = sum(`Current MS %ELA`))%>%
+  pivot_longer(c(2:3), names_to = "MCAS", values_to = "Predicted Sending % Meet or Exceed")
+
+Current_MS_MCAS
+
+
+
+Current_MS_MCAS%>%
+  ggplot(aes(fill=`Current MS`, y=`Predicted Sending % Meet or Exceed`, x=`MCAS`)) + geom_bar(position="dodge", stat="identity")+
+  labs( 
+       y = "Projected Sending % Meeting or Exceeding",
+       x= "MCAS Test",
+       subtitle = "Current MS Feeding Pattern",
+       title = "Predicted Sending MCAS Achievement",
+      caption = "Projections using 2022 MCAS Results and Population Sizes")+
+       theme(axis.text.x=element_text(angle=60,hjust=1))+
+   geom_text(aes(label = `Predicted Sending % Meet or Exceed`), vjust = 1.5, colour = "white", position = position_dodge(.9))
+
+
+
+```
+
+Proposed MS MCAS
+
+```{r}
+Proposed_MS_MCAS<-BPS_MCAS_Current%>%
+  group_by(`Proposed MS`)%>%
+  summarise(`Math% Meet or Exceed` = sum(`Proposed MS %Math`),
+                    `ELA% Meet or Exceed` = sum(`Proposed MS %ELA`))%>%
+  pivot_longer(c(2:3), names_to = "MCAS", values_to = "Predicted Sending % Meet or Exceed")
+
+
+
+Proposed_MS_MCAS%>%
+  ggplot(aes(fill=`Proposed MS`, y=`Predicted Sending % Meet or Exceed`, x=`MCAS`)) + geom_bar(position="dodge", stat="identity")+
+  labs( subtitle = "Proposed MS: Flaherty to South",
+       y = "Projected Sending % Meeting or Exceeding",
+       x= "MCAS Test",
+       title = "Predicted Sending MCAS Achievement",
+      caption = "Projections using 2022 MCAS Results and Population Sizes")+
+       theme(axis.text.x=element_text(angle=60,hjust=1))+
+   geom_text(aes(label = `Predicted Sending % Meet or Exceed`), vjust = 1.5, colour = "white", position = position_dodge(.9))
+
+
+
+```
+```{r}
+Proposed_MS2_MCAS<-BPS_MCAS_Current%>%
+  group_by(`Proposed MS2`)%>%
+  summarise(`Math% Meet or Exceed` = sum(`Proposed MS2 %Math`),
+                    `ELA% Meet or Exceed` = sum(`Proposed MS2 %ELA`))%>%
+  pivot_longer(c(2:3), names_to = "MCAS", values_to = "Predicted Sending % Meet or Exceed")
+
+
+
+Proposed_MS2_MCAS%>%
+  ggplot(aes(fill=`Proposed MS2`, y=`Predicted Sending % Meet or Exceed`, x=`MCAS`)) + geom_bar(position="dodge", stat="identity")+
+  labs( subtitle = "Proposed MS2: Morrison to South",
+       y = "Projected % Meeting or Exceeding in Elementary",
+       x= "MCAS Test",
+       title = "Predicted Sending MCAS Achievement",
+      caption = "Projections using 2022 MCAS Results and Population Sizes")+
+       theme(axis.text.x=element_text(angle=60,hjust=1))+
+   geom_text(aes(label = `Predicted Sending % Meet or Exceed`), vjust = 1.5, colour = "white", position = position_dodge(.9))
+
+
+
+```
+
+
+<!-- Race -->
+<!-- ```{r} -->
+<!-- Enrollment_Total_Race_Test -->
+<!-- Enrollment_Total_Race_Test%>% -->
+<!--   group_by(`Proposed MS`, `Race`)%>% -->
+<!--    summarise(`Test%Race_Proposed_MS` = sum(`%Race_Proposed_MS`, na.rm=TRUE))%>% -->
+
+
+<!--   ggplot(aes(fill=`Proposed MS`, y=`Test%Race_Proposed_MS`, x=`Race`)) + geom_bar(position="dodge", stat="identity")+ -->
+<!--   labs(subtitle ="Calculate" , -->
+<!--        y = "Available Points", -->
+<!--        x= "Reporting Category", -->
+<!--        title = "Proposed MS Race", -->
+<!--       caption = "2022 HS Introductory Physics MCAS")+ -->
+<!--        theme(axis.text.x=element_text(angle=60,hjust=1))+ -->
+<!--    geom_text(aes(label = `Test%Race_Proposed_MS`), vjust = -1, colour = "black", position = position_dodge(.9)) -->
+
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- Enrollment_Total_Race_Test -->
+<!-- Enrollment_Total_Race_Test%>% -->
+<!--   group_by(`Current MS`, `Race`)%>% -->
+<!--    summarise(`Test%Race_Current_MS` = sum(`%Race_Current_MS`, na.rm=TRUE))%>% -->
+
+
+<!--   ggplot(aes(fill=`Current MS`, y=`Test%Race_Current_MS`, x=`Race`)) + geom_bar(position="dodge", stat="identity")+ -->
+<!--   labs(subtitle ="Calculate" , -->
+<!--        y = "Available Points", -->
+<!--        x= "Reporting Category", -->
+<!--        title = "Current MS Race", -->
+<!--       caption = "2022 HS Introductory Physics MCAS")+ -->
+<!--        theme(axis.text.x=element_text(angle=60,hjust=1))+ -->
+<!--    geom_text(aes(label = `Test%Race_Current_MS`), vjust = -1.5, colour = "black", position = position_dodge(.9)) -->
+
+<!-- ``` -->
+
+
+
