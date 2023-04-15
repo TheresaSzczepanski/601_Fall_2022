@@ -141,7 +141,7 @@ would use to scale up this project. There is still work to be done here.
 ### Item analysis Read in Function
 
 ```{r}
-#Item analysis Read in Function: Input: sheet_name, subject, grade; return: student item report for a given grade level and subject.
+#Item analysis Read in Function: Input: file_path, sheet_name, subject; return: student item report for a given grade level and subject.
 
 #subject must be: "math", "ela", or "science"
 read_item<-function(file_path, sheet_name, subject){
@@ -150,7 +150,18 @@ read_item<-function(file_path, sheet_name, subject){
     subject == "math"~"mitem",
     subject == "ela"~"eitem"
   )
-  if(subject == "science"){
+  if(subject == "science" && sheet_name == "SG11Bio"){
+  read_excel(file_path, sheet = sheet_name, 
+             skip = 1, col_names= c(subject_item, "Type", "Reporting Category", "Standard", "item Desc", "delete", "item Possible Points","delete", "State Percent Points", "delete")) %>%
+                  select(!contains("delete"))%>%
+                  filter(!str_detect(sitem,"Legend|legend"))%>%
+    mutate(sitem= as.character(sitem))%>%
+    separate(c(1), c("sitem", "delete"))%>%
+  select(!contains("delete"))%>%
+   mutate(sitem =
+            str_c(subject_item, sitem))
+  }
+  else if(subject == "science" && sheet_name != "SG11Bio"){
   read_excel(file_path, sheet = sheet_name, 
              skip = 1, col_names= c(subject_item, "Type", "Reporting Category", "Standard", "item Desc", "delete", "item Possible Points","RT Percent Points", "State Percent Points", "RT-State Diff")) %>%
                   select(!contains("delete"))%>%
@@ -190,6 +201,8 @@ read_item<-function(file_path, sheet_name, subject){
 }
 testELA10<-read_item("_data/2022MCASItemAnalysis.xlsx", "EG10", "ela")
 testELA10
+testBio11<-read_item("_data/2022MCASItemAnalysis.xlsx", "SG11Bio", "science")
+testBio11
 ```
 ### Function to Read in Item Analysis Crosswalk and Join with Item Analysis Data Frame
 
@@ -236,6 +249,8 @@ read_item_xwalk<-function(file_path, sheet_name, subject){
     
 }
 ### Test Item xWalk read in-----------------------------------------------------------
+G11Bio_xwalk<-read_item_xwalk("_data/2022MCASItemXWalk.xlsx", "SG11_practice_xwalk", "science")
+G11Bio_xwalk
 G9Sci_xwalk<-read_item_xwalk("_data/2022MCASItemXWalk.xlsx", "SG9_practice_xwalk", "science")
 G9Sci_xwalk
 G8Sci_xwalk<-read_item_xwalk("_data/2022MCASItemXWalk.xlsx", "SG8_practice_xwalk", "science")
@@ -270,9 +285,9 @@ Join_Item_Xwalk<-function(subject, subjectItemDF, subjectItemXwalkDF){
  }
 }
 ## Testing Join Item xWalk Function
-#G9sciTestDF<-read_item("_data/2022MCASItemAnalysis.xlsx", "SG9Physics", "science")
-#G9Sci_Final<-Join_Item_Xwalk("science", G9sciTestDF, G9Sci_xwalk)
-#G9Sci_Final
+G9sciTestDF<-read_item("_data/2022MCASItemAnalysis.xlsx", "SG9Physics", "science")
+G9Sci_Final<-Join_Item_Xwalk("science", G9sciTestDF, G9Sci_xwalk)
+G9Sci_Final
 G10ELATestDF<-read_item("_data/2022MCASItemAnalysis.xlsx", "EG10", "ela")
 G10ELA_Final<-Join_Item_Xwalk("ela", G10ELATestDF, G10ELA_xwalk)
 G10ELA_Final
@@ -397,33 +412,28 @@ read_MCAS_Prelim<-function(file_path, year){read_csv(file_path,
 
 ```{r}
 
-##Function for number of points available by question type
-Item_Type_Points <-function(subject, itemType, subjectItemDF){
-    if(subject == "science"){
-          subjectItemDF%>%
-          select(`Type`, `item Possible Points`)%>%
-          group_by(`Type`)%>%
-          summarize(available_points = sum(`item Possible Points`, na.rm=TRUE))%>%
-          filter(`Type` == itemType)#%>%
-          #select(available_points)
-        
-##To-Do update points available for math and ELA and test...    
+##Function for number of points available by question type:
+# Math: CR, SA, SR
+#ELA: ES, SR
+# Sci: CR, SR
+Item_Type_Points <-function(itemType, subjectItemDF){
+    
+    if(itemType == "ES"){
+      subjectItemDF%>%
+      select(`Type`, `item Possible Points`)%>%
+      group_by(`Type`)%>%
+      summarize(available_points = .5*sum(`item Possible Points`, na.rm=TRUE))%>%
+      filter(`Type` == itemType)
+         
+    }else{
+      subjectItemDF%>%
+      select(`Type`, `item Possible Points`)%>%
+      group_by(`Type`)%>%
+      summarize(available_points = sum(`item Possible Points`, na.rm=TRUE))%>%
+      filter(`Type` == itemType)
     }
-  else if (subject == "math"){
-    subjectItemDF%>%
-      select(`mitem`, `item Possible Points`, `Reporting Category`)%>%
-      group_by(`Reporting Category`)%>%
-      summarise(available_points = sum(`item Possible Points`, na.rm=TRUE))
-  
-  } 
-  else if (subject == "ela"){
-    subjectItemDF%>%
-    select(`eitem`, `item Possible Points`, `Reporting Category`)%>%
-    group_by(`Reporting Category`)%>%
-    summarise(available_points = sum(`item Possible Points`, na.rm=TRUE))
-   
-  }
-}
+  }       
+
 
 
 
@@ -443,14 +453,16 @@ Reporting_Cat_Points <-function(subject, reportingCategory, subjectItemDF){
     subjectItemDF%>%
       select(`mitem`, `item Possible Points`, `Reporting Category`)%>%
       group_by(`Reporting Category`)%>%
-      summarise(available_points = sum(`item Possible Points`, na.rm=TRUE))
+      summarise(available_points = sum(`item Possible Points`, na.rm=TRUE))%>%
+      filter(`Reporting Category` == reportingCategory)
   
   } 
   else if (subject == "ELA"){
     subjectItemDF%>%
     select(`eitem`, `item Possible Points`, `Reporting Category`)%>%
     group_by(`Reporting Category`)%>%
-    summarise(available_points = sum(`item Possible Points`, na.rm=TRUE))
+    summarise(available_points = sum(`item Possible Points`, na.rm=TRUE))%>%
+    filter(`Reporting Category` == reportingCategory)
    
   }
 }
@@ -460,10 +472,10 @@ Reporting_Cat_Points <-function(subject, reportingCategory, subjectItemDF){
 Practice_Cat_Points <-function(subject, practiceCategory, subjectItemDF){
     if(subject == "science"){
           subjectItemDF%>%
-          select(`sitem`, `item Possible Points`, `Science Practice Category`)%>%
-          group_by(`Science Practice Category`)%>%
+          select(`sitem`, `item Possible Points`, `Practice Category`)%>%
+          group_by(`Practice Category`)%>%
           summarize(available_points = sum(`item Possible Points`, na.rm=TRUE))%>%
-          filter(`Science Practice Category` == practiceCategory)#%>%
+          filter(`Practice Category` == practiceCategory)#%>%
           
         
     
@@ -538,7 +550,7 @@ Subject_Cat_Total<-function(subject, subjectItemDF){
 
 #### Test Data Frames------------------------------------------------------------------
 G9ScitestDF<-read_item("_data/2022MCASItemAnalysis.xlsx", "SG9Physics", "science")
-testDFELA<-read_item("_data/2022MCASItemAnalysis.xlsx", "EG10", "ela", 10)
+testDFELA<-read_item("_data/2022MCASItemAnalysis.xlsx", "EG10", "ela")
 #view(testDF)
 # testDF%>%
 #   select(`sitem`, `item Possible Points`, `Reporting Category`)%>%
@@ -551,24 +563,28 @@ testDFELA<-read_item("_data/2022MCASItemAnalysis.xlsx", "EG10", "ela", 10)
 #Subject_Cat_Total("science", testDF)
 #---------------------------Physics Function Tests------------------------------------------
 testDF
-MDataPoints<-Practice_Cat_Points("science", "Mathematics and Data", testDF)
+MDataPoints<-Practice_Cat_Points("science", "Mathematics and Data", G9Sci_Final)
 MDataPoints
-ERMPoints<-Practice_Cat_Points("science", "Evidence, Reasoning, and Modeling", testDF)
+ERMPoints<-Practice_Cat_Points("science", "Evidence, Reasoning, and Modeling", G9Sci_Final)
 ERMPoints
-IQPoints<-Practice_Cat_Points("science", "Investigations and Questioning", testDF)
+IQPoints<-Practice_Cat_Points("science", "Investigations and Questioning", G9Sci_Final)
 IQPoints
-ENPoints<-Reporting_Cat_Points("science", "EN", testDF)
+ENPoints<-Reporting_Cat_Points("science", "EN", G9Sci_Final)
 ENPoints
-MFPoints<-Reporting_Cat_Points("science", "MF", testDF )
+MFPoints<-Reporting_Cat_Points("science", "MF", G9Sci_Final )
 MFPoints
-WAPoints<-Reporting_Cat_Points("science", "WA", testDF )
+WAPoints<-Reporting_Cat_Points("science", "WA", G9Sci_Final )
 WAPoints
-CRPoints<-Item_Type_Points("science", "CR", testDF)
+CRPoints<-Item_Type_Points("CR", G9Sci_Final)
 CRPoints
-SRPoints<-Item_Type_Points("science", "SR", testDF)
+SRPoints<-Item_Type_Points("SR", G9Sci_Final)
 SRPoints
 #----------------------------------ELA function tests -------------------------------------------
 testDFELA
+ESPoints<-Item_Type_Points("ES", testDFELA)
+ESPoints
+ELASRPoints<-Item_Type_Points("SR", testDFELA)
+ELASRPoints
 
 ```
 
@@ -599,11 +615,11 @@ if(subject == "math"){
 }
 }
 # TestMCAS_2022<-read_MCAS_Prelim("_data/PrivateSpring2022_MCAS_full_preliminary_results_04830305.csv",2022)
-# SG5_Item<-read_item("SG5", "science", 5)
+# SG5_Item<-read_item("SG5", "science")
 # SG5_Student_Item<-Student_Item("science", 5, SG5_Item, TestMCAS_2022)
 # SG5_Student_Item
 # TestMCAS_2022<-read_MCAS_Prelim("_data/PrivateSpring2022_MCAS_full_preliminary_results_04830305.csv",2022)
-# MG5_Item<-read_item("MG5", "math", 5)
+# MG5_Item<-read_item("MG5", "math")
 # MG5_Student_Item<-Student_Item("math", 5, MG5_Item, TestMCAS_2022)
 # MG5_Student_Item
 
@@ -631,11 +647,11 @@ keyWord<-function(subjectItemDF, subject, keyWord){
   }
 }
 #view(SG9_Calc)
-# MG8_Item<-read_item("MG8", "math", 8)
+# MG8_Item<-read_item("MG8", "math")
 # MG5_Item
 # MG8_Describe<-keyWord(MG8_Item, "math", "determine")
 # MG8_Describe
-# SG8_Item<-read_item("SG8", "science", 8)
+# SG8_Item<-read_item("SG8", "science")
 # SG8_Item
 # SG8_Calc<-keyWord(SG8_Item, "science", "calculate")
 # SG8_Calc
