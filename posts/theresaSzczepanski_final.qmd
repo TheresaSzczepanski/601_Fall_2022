@@ -204,6 +204,7 @@ testELA10
 testBio11<-read_item("_data/2022MCASItemAnalysis.xlsx", "SG11Bio", "science")
 testBio11
 ```
+
 ### Function to Read in Item Analysis Crosswalk and Join with Item Analysis Data Frame
 
 ```{r}
@@ -302,11 +303,10 @@ Join_ELAItem_Cluster<-function(elaItemDF, clusterXwalk){
 
 G10ELA_FinalCluster<-Join_ELAItem_Cluster(G10ELA_Final, ELA_cluster_xwalk)
 G10ELA_FinalCluster
+ELA10_ES_item<-G10ELA_FinalCluster %>%
+  filter(str_detect(eitem,"LA"))
+ELA10_ES_item
 ```
-
-
-
-
 
 ### Function to Read in MCAS Preliminary Results
 
@@ -457,7 +457,7 @@ Reporting_Cat_Points <-function(subject, reportingCategory, subjectItemDF){
       filter(`Reporting Category` == reportingCategory)
   
   } 
-  else if (subject == "ELA"){
+  else if (subject == "ela"){
     subjectItemDF%>%
     select(`eitem`, `item Possible Points`, `Reporting Category`)%>%
     group_by(`Reporting Category`)%>%
@@ -488,7 +488,7 @@ Practice_Cat_Points <-function(subject, practiceCategory, subjectItemDF){
   #     summarise(available_points = sum(`item Possible Points`, na.rm=TRUE))
   
   #} 
-  else if (subject == "ELA"){
+  else if (subject == "ela"){
     subjectItemDF%>%
     select(`eitem`, `item Possible Points`, `Cluster`)%>%
     group_by(`Cluster`)%>%
@@ -678,7 +678,7 @@ Introductory Physics, `SG9_Item` Read-In
 # G9 Science Item analysis
 
 
-SG9_Item<-read_item("SG9Physics", "science")%>%
+SG9_Item<-read_item("_data/2022MCASItemAnalysis.xlsx","SG9Physics", "science")%>%
   mutate(`Reporting Category` = case_when(
     `Reporting Category` == "EN" ~ "Energy",
     `Reporting Category` == "MF" ~ "Motion and Forces",
