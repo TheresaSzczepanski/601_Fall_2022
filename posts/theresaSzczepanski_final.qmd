@@ -639,7 +639,7 @@ if(subject == "math"){
 # MG5_Student_Item
 
 ```
-
+### Function Student Performance by Reporting Category
 ### Function Student Performance by KeyWord
 
 ```{r}
@@ -685,6 +685,9 @@ MCAS_2022<-read_MCAS_Prelim("_data/PrivateSpring2022_MCAS_full_preliminary_resul
 
 #view(MCAS_2022)
 MCAS_2022
+dr=getwd()
+dr
+#write.csv(df, "C:\\Users\\Bob\\Desktop\\data.csv", row.names=FALSE)
 ```
 
 Introductory Physics, `SG9_Item` Read-In
